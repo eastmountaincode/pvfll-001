@@ -5,7 +5,7 @@ import { pusherServer } from "@/lib/pusher";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 
-// GET /api/boxes/:box/files/:file - Get download URL for a specific file
+// GET /api/boxes/:box/files/:file - Stream file download and delete after
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ box: string; file: string }> }
@@ -20,17 +20,58 @@ export async function GET(
     const key = `box${box}/${file}`;
 
     try {
-        const command = new GetObjectCommand({ 
+        // Get the file from S3
+        const getCommand = new GetObjectCommand({ 
             Bucket: bucket, 
-            Key: key,
-            ResponseContentDisposition: `attachment; filename="${file}"`
+            Key: key
         });
         
-        const url = await getSignedUrl(s3, command, { expiresIn: 120 }); // 2 minutes
+        const s3Response = await s3.send(getCommand);
+        
+        if (!s3Response.Body) {
+            return NextResponse.json({ error: "File not found" }, { status: 404 });
+        }
 
-        return NextResponse.json({ url });
+        // Convert the stream to a buffer
+        const chunks = [];
+        const reader = s3Response.Body.transformToWebStream().getReader();
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+        }
+        
+        const fileBuffer = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0));
+        let offset = 0;
+        for (const chunk of chunks) {
+            fileBuffer.set(chunk, offset);
+            offset += chunk.length;
+        }
+
+        // Delete the file from S3 after we have it
+        await s3.send(new DeleteObjectCommand({ 
+            Bucket: bucket, 
+            Key: key 
+        }));
+
+        // Trigger Pusher event to notify all clients that the file was deleted
+        await pusherServer.trigger('garden', 'file-deleted', {
+            boxNumber: box,
+            fileName: file
+        });
+
+        // Stream the file to the client
+        return new Response(fileBuffer, {
+            headers: {
+                'Content-Type': 'application/octet-stream',
+                'Content-Disposition': `attachment; filename="${file}"`,
+                'Content-Length': fileBuffer.length.toString(),
+            },
+        });
+
     } catch (err) {
-        console.error("download url error:", err);
+        console.error("download/delete error:", err);
         const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
         return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
