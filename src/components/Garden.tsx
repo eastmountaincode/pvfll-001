@@ -11,10 +11,12 @@ export default function Garden() {
                     ❋ ❃ ❁ ❀ ✿
                 </h2>
             </div>
-            <Box boxNumber={1} isFirst />
-            <Box boxNumber={2} />
-            <Box boxNumber={3} />
-            <Box boxNumber={4} />
+            <div className="pt-[10px] pb-[40px] space-y-[30px]">
+                <Box boxNumber={1} />
+                <Box boxNumber={2} />
+                <Box boxNumber={3} />
+                <Box boxNumber={4} />
+            </div>
         </div>
     );
 }

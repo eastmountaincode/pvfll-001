@@ -1,16 +1,46 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { FaFile } from 'react-icons/fa';
 
 interface BoxProps {
     boxNumber: number;
-    isFirst?: boolean;
 }
 
-export default function Box({ boxNumber, isFirst = false }: BoxProps) {
+const downloadColor = 'bg-red-400';
+const uploadColor = 'bg-yellow-400';
+const backgroundColor = 'bg-green-400';
+const disabledOpacity = 'opacity-20';
+
+export default function Box({ boxNumber }: BoxProps) {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [boxStatus, setBoxStatus] = useState<{ empty: boolean; name?: string; size?: number }>({ empty: true });
+    const [loading, setLoading] = useState(true);
+
+    const fetchBoxStatus = async () => {
+        try {
+            setLoading(true);
+            const response = await fetch(`/api/boxes/${boxNumber}/files`);
+            const data = await response.json();
+            setBoxStatus(data);
+        } catch (error) {
+            console.error('Error fetching box status:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const formatSize = (bytes: number) => {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    useEffect(() => {
+        fetchBoxStatus();
+    }, []);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0] || null;
@@ -23,10 +53,9 @@ export default function Box({ boxNumber, isFirst = false }: BoxProps) {
         if (!selectedFile) return;
 
         // 1) ask api for a presigned POST url
-        const presignResponse = await fetch('/api/files', {
+        const presignResponse = await fetch(`/api/boxes/${boxNumber}/files`, {
             method: 'POST',
             body: JSON.stringify({
-                boxNumber,
                 fileName: selectedFile.name,
                 fileType: selectedFile.type || "application/octet-stream",
             }),
@@ -71,27 +100,54 @@ export default function Box({ boxNumber, isFirst = false }: BoxProps) {
         }).finally(() => setUploading(false));
 
         console.log('File uploaded to S3 successfully', key);
+        
+        // Refresh box status after successful upload
+        await fetchBoxStatus();
     };
 
     return (
-        <div className={`mx-[20px] ${!isFirst ? 'mt-[30px]' : ''}`}>
-            <div className="border border-black max-w-sm mx-auto shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
-                <div className="flex items-center">
+        <div className="mx-[20px]">
+            <div className={`border border-black max-w-sm mx-auto shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] ${backgroundColor}`}>
+                
+                {/* BOX NUMBER */}
+                <div className="mt-1 flex items-center justify-between">
                     <p className="font-black mx-2.5 mb-2 text-4xl">{boxNumber}</p>
+                    {!loading && !boxStatus.empty && (
+                        <FaFile className="mx-2.5 mb-2 text-2xl text-red-400" />
+                    )}
                 </div>
-                <form className="mx-2.5" onSubmit={handleSubmit}>
-                    <label className="inline-block px-2 py-1 border cursor-pointer">
-                        Choose File
-                        <input
-                            type="file"
-                            name="fileToUpload"
-                            required
-                            className="hidden"
-                            onChange={handleFileChange}
-                        />
-                    </label>
+                {/* BOX STATUS */}
+                <p className={`m-2.5 mt-0.5 border px-2 py-1`}>
+                    {loading 
+                        ? `box${boxNumber}: loading...`
+                        : boxStatus.empty 
+                            ? `box${boxNumber}: empty`
+                            : `file in box${boxNumber}: ${boxStatus.name} (${formatSize(boxStatus.size!)})`
+                    }
+                </p>
+                {/* RECEIVE */}
+                <button 
+                    className={`mx-2.5 px-2 py-1 border ${boxStatus.empty ? disabledOpacity + ' cursor-not-allowed' : 'cursor-pointer'} ${downloadColor}`} 
+                    type="button" 
+                    disabled={boxStatus.empty}
+                >
+                    Receive
+                </button>
+                {/* UPLOAD */}
+                <form className="mt-2.5 mx-2.5" onSubmit={handleSubmit}>
+                                         <label className={`inline-block px-2 py-1 border ${loading || !boxStatus.empty ? disabledOpacity + ' cursor-not-allowed' : 'cursor-pointer'} ${uploadColor}`}>
+                         Choose File
+                         <input
+                             type="file"
+                             name="fileToUpload"
+                             required
+                             className="hidden"
+                             onChange={handleFileChange}
+                             disabled={loading || !boxStatus.empty}
+                         />
+                     </label>
                     {selectedFile && (
-                        <p className="mt-2">Selected: {selectedFile.name}</p>
+                        <p className="mt-2 ${uploadColor}">Selected: {selectedFile.name}</p>
                     )}
 
                     {uploading && (
@@ -107,13 +163,10 @@ export default function Box({ boxNumber, isFirst = false }: BoxProps) {
                         type="submit"
                         value="Offer"
                         disabled={!selectedFile}
-                        className={`mt-1 px-2 py-1 border ${selectedFile ? 'cursor-pointer' : ''} ${!selectedFile ? 'opacity-50' : ''}`}
+                        className={`my-2.5 px-2 py-1 border ${selectedFile ? 'cursor-pointer' : ''} ${!selectedFile ? disabledOpacity : ''} ${uploadColor}`}
                     />
                 </form>
-                <button className="mx-2.5 mt-1 px-2 py-1 border cursor-pointer" type="button" disabled>
-                    Receive
-                </button>
-                <p className="m-2.5 mt-3">box{boxNumber}: empty</p>
+                
             </div>
         </div>
     );
