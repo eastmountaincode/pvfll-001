@@ -29,9 +29,10 @@ export async function GET(
         const url = await getSignedUrl(s3, command, { expiresIn: 120 }); // 2 minutes
 
         return NextResponse.json({ url });
-    } catch (err: any) {
+    } catch (err) {
         console.error("download url error:", err);
-        return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
 }
 
@@ -62,8 +63,9 @@ export async function DELETE(
         });
 
         return NextResponse.json({ success: true });
-    } catch (err: any) {
+    } catch (err) {
         console.error("delete file error:", err);
-        return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
 }

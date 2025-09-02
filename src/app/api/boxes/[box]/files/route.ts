@@ -1,7 +1,6 @@
 import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import { NextRequest, NextResponse } from "next/server";
-import { pusherServer } from "@/lib/pusher";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION});
 
@@ -49,11 +48,12 @@ export async function GET(
             name: fileName,
             size: file.Size || 0
         });
-    } catch (err: any) {
+    } catch (err) {
         console.error("list files error:", err);
-        return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
-}
+}   
 
 // POST /api/boxes/:box/files - Upload a file (presigned POST)
 export async function POST(
