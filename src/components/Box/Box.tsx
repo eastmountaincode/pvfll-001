@@ -52,7 +52,7 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
             document.body.removeChild(link);
 
             // Refresh box status to show it's now empty (Pusher will also handle this)
-            await fetchBoxStatus();
+            //await fetchBoxStatus();
         } catch (error) {
             console.error('Error receiving file:', error);
             // Refresh status in case file was deleted by someone else
