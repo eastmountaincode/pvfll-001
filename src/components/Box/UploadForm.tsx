@@ -75,6 +75,17 @@ export default function UploadForm({ boxNumber, disabled, onUploadComplete }: Up
 
             console.log('File uploaded to S3 successfully', key);
             
+            // Trigger event to notify all clients via Pusher
+            await fetch(`/api/boxes/${boxNumber}/events`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'file-uploaded',
+                    fileName: selectedFile.name,
+                    fileSize: selectedFile.size
+                })
+            });
+            
             // Clear selected file and notify parent
             setSelectedFile(null);
             onUploadComplete();

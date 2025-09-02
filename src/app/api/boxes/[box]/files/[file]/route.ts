@@ -1,6 +1,7 @@
 import { S3Client, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { NextRequest, NextResponse } from "next/server";
+import { pusherServer } from "@/lib/pusher";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 
@@ -53,6 +54,12 @@ export async function DELETE(
             Bucket: bucket, 
             Key: key 
         }));
+
+        // Trigger Pusher event to notify all clients that the file was deleted
+        await pusherServer.trigger('garden', 'file-deleted', {
+            boxNumber: box,
+            fileName: file
+        });
 
         return NextResponse.json({ success: true });
     } catch (err: any) {

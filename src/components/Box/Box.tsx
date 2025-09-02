@@ -8,11 +8,12 @@ import UploadForm from './UploadForm';
 
 interface BoxProps {
     boxNumber: number;
+    onRegisterCallback: (boxNumber: number, callback: () => void) => void;
 }
 
 const backgroundColor = 'bg-green-400';
 
-export default function Box({ boxNumber }: BoxProps) {
+export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
     const [boxStatus, setBoxStatus] = useState<{ empty: boolean; name?: string; size?: number }>({ empty: true });
     const [loading, setLoading] = useState(true);
 
@@ -31,7 +32,9 @@ export default function Box({ boxNumber }: BoxProps) {
 
     useEffect(() => {
         fetchBoxStatus();
-    }, []);
+        // Register this box's update callback with the Garden component
+        onRegisterCallback(boxNumber, fetchBoxStatus);
+    }, [boxNumber, onRegisterCallback]);
 
     const handleReceive = async () => {
         if (boxStatus.empty || !boxStatus.name) return;

@@ -1,6 +1,7 @@
 import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import { NextRequest, NextResponse } from "next/server";
+import { pusherServer } from "@/lib/pusher";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION});
 
