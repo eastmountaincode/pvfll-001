@@ -40,19 +40,22 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
         if (boxStatus.empty || !boxStatus.name) return;
 
         try {
-            // Download file directly (this will also delete it and trigger Pusher event)
-            const downloadUrl = `/api/boxes/${boxNumber}/files/${encodeURIComponent(boxStatus.name)}`;
+            // Fetch the file (this triggers API call immediately - deletes file and sends Pusher event)
+            const response = await fetch(`/api/boxes/${boxNumber}/files/${encodeURIComponent(boxStatus.name)}`);
+            if (!response.ok) throw new Error('Download failed');
             
-            // Trigger download
+            // Create blob and trigger download
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            link.href = downloadUrl;
+            link.href = url;
             link.download = boxStatus.name;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-
-            // Refresh box status to show it's now empty (Pusher will also handle this)
-            //await fetchBoxStatus();
+            URL.revokeObjectURL(url);
+            
+            // File is already deleted by API, Pusher event already sent
         } catch (error) {
             console.error('Error receiving file:', error);
             // Refresh status in case file was deleted by someone else
