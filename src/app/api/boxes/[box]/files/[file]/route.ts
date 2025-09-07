@@ -15,9 +15,9 @@ function contentDisposition(filename: string) {
 // GET /api/boxes/:box/files/:file - Stream file download and delete after transfer
 export async function GET(
     request: NextRequest,
-    { params }: { params: { box: string; file: string } }
+    { params }: { params: Promise<{ box: string; file: string }> }
 ) {
-    const { box, file } = params;
+    const { box, file } = await params;
     const bucket = process.env.AWS_BUCKET_NAME!;
     const key = `box${box}/${file}`;
 
