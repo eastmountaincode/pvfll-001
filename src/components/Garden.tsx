@@ -23,6 +23,7 @@ export default function Garden() {
             console.log('Pusher: Disconnected');
         });
         
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         pusherClient.connection.bind('error', (error: any) => {
             console.log('Pusher: Connection error', error);
         });
