@@ -59,7 +59,7 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
         } catch (error) {
             console.error('Error receiving file:', error);
             // Refresh status in case file was deleted by someone else
-            await fetchBoxStatus();
+            // await fetchBoxStatus();
         }
     };
 
