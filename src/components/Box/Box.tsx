@@ -20,8 +20,10 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
     const fetchBoxStatus = async () => {
         try {
             setLoading(true);
+            console.log(`Fetching status for box ${boxNumber}`);
             const response = await fetch(`/api/boxes/${boxNumber}/files`);
             const data = await response.json();
+            console.log(`Box ${boxNumber} status:`, data);
             setBoxStatus(data);
         } catch (error) {
             console.error('Error fetching box status:', error);
@@ -39,10 +41,14 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
     const handleReceive = async () => {
         if (boxStatus.empty || !boxStatus.name) return;
 
+        console.log(`Starting download for box ${boxNumber}, file: ${boxStatus.name}`);
+
         try {
             // Fetch the file (this triggers API call immediately - deletes file and sends Pusher event)
             const response = await fetch(`/api/boxes/${boxNumber}/files/${encodeURIComponent(boxStatus.name)}`);
             if (!response.ok) throw new Error('Download failed');
+            
+            console.log(`Download API call successful for box ${boxNumber}`);
             
             // Create blob and trigger download
             const blob = await response.blob();
@@ -55,11 +61,19 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             
+            console.log(`Download triggered for box ${boxNumber}, waiting for status update...`);
+            
             // File is already deleted by API, Pusher event already sent
+            // Add fallback refresh for mobile devices where Pusher events might not work properly
+            setTimeout(() => {
+                console.log(`Fallback refresh triggered for box ${boxNumber}`);
+                fetchBoxStatus();
+            }, 1000); // Wait 1 second to allow for any pending Pusher events
+            
         } catch (error) {
             console.error('Error receiving file:', error);
             // Refresh status in case file was deleted by someone else
-            // await fetchBoxStatus();
+            await fetchBoxStatus();
         }
     };
 
