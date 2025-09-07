@@ -15,8 +15,7 @@ export async function GET(
 
     console.log(`[API] Starting download for box ${box}, file: ${file}`);
     console.log(`[API] File parameter: "${file}"`);
-    console.log(`[API] File length: ${file.length}`);
-    console.log(`[API] File char codes:`, Array.from(file).map((char, i) => `${i}: ${char} (${char.charCodeAt(0)})`).slice(0, 10));
+    console.log(`[API] Filename length: ${file.length}`);
 
     if (!bucket) {
         console.error(`[API] AWS bucket configuration missing`);
@@ -32,6 +31,7 @@ export async function GET(
             Key: key
         });
         
+        // This returns metadata and a stream handle, but doesn't actually download yet
         const s3Response = await s3.send(getCommand);
         
         if (!s3Response.Body || typeof s3Response.Body.transformToWebStream !== 'function') {

@@ -61,32 +61,26 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
         console.log(`Starting download for box ${boxNumber}, file: ${boxStatus.name}`);
 
         try {
-            // Fetch the file (this triggers API call immediately - deletes file and sends Pusher event)
-            const response = await fetch(`/api/boxes/${boxNumber}/files/${encodeURIComponent(boxStatus.name)}`);
-            if (!response.ok) throw new Error('Download failed');
-
-            console.log(`Response:`, response);
-            console.log(`Download API call successful for box ${boxNumber}`);
+            console.log(`Creating download link for box ${boxNumber}`);
             
-            // Create blob and trigger download
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
+            // Use direct link approach - more mobile-friendly and memory efficient
+            const url = `/api/boxes/${boxNumber}/files/${encodeURIComponent(boxStatus.name)}`;
             const link = document.createElement('a');
             link.href = url;
-            link.download = boxStatus.name;
+            link.download = boxStatus.name; // hint; server's Content-Disposition is authoritative
+            link.rel = 'noopener';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            URL.revokeObjectURL(url);
             
-            console.log(`Download triggered for box ${boxNumber}, waiting for status update...`);
+            console.log(`Download link clicked for box ${boxNumber}, waiting for status update...`);
             
-            // File is already deleted by API, Pusher event already sent
+            // File will be deleted by API after stream completes, Pusher event will be sent
             // Add fallback refresh for mobile devices where Pusher events might not work properly
-            setTimeout(() => {
-                console.log(`Fallback refresh triggered for box ${boxNumber}`);
-                fetchBoxStatus();
-            }, 1000); // Wait 1 second to allow for any pending Pusher events
+            // setTimeout(() => {
+            //     console.log(`Fallback refresh triggered for box ${boxNumber}`);
+            //     fetchBoxStatus();
+            // }, 2000); // Wait 2 seconds to allow for download and cleanup to complete
             
         } catch (error) {
             console.error('Error receiving file:', error);
