@@ -12,13 +12,6 @@ function contentDisposition(filename: string) {
     return `attachment; filename="${safe}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
-function withTimeout<T>(p: Promise<T>, ms: number, label: string) {
-    return Promise.race([
-        p,
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`${label} timeout after ${ms}ms`)), ms)),
-    ]);
-}
-
 // GET /api/boxes/:box/files/:file - Stream file download and delete after transfer
 export async function GET(
     request: NextRequest,
@@ -40,32 +33,39 @@ export async function GET(
 
         console.log(`[API] File found, starting stream for: ${key}`);
 
-        const { readable, writable } = new TransformStream();
-        const pipePromise = s3Response.Body.transformToWebStream().pipeTo(writable);
+        // Manual ReadableStream to detect full consumption and run side effects
+        const src = s3Response.Body.transformToWebStream();
+        const reader = src.getReader();
 
-        // Post-response cleanup using setTimeout to defer until after response is sent
-        setTimeout(async () => {
-            try {
-                console.log(`[API] Waiting for stream completion for: ${key}`);
-                // Only proceed on full, successful client read
-                await pipePromise;
-                
-                console.log(`[API] Stream completed, deleting file: ${key}`);
-                await withTimeout(s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })), 8000, "S3 Delete");
-                
-                console.log(`[API] File deleted, sending Pusher event for box ${box}`);
-                await withTimeout(
-                    pusherServer.trigger("garden", "file-deleted", { boxNumber: box, fileName: file }),
-                    8000,
-                    "Pusher trigger"
-                );
-                
-                console.log(`[API] Cleanup completed for box ${box}`);
-            } catch (err) {
-                // Catches stream aborts OR delete/notify failures
-                console.error(`[API] Post-response cleanup error for ${key}:`, err);
+        const stream = new ReadableStream({
+            async pull(controller) {
+                const { value, done } = await reader.read();
+                if (done) {
+                    try {
+                        // Client fully consumed the stream → now do side effects
+                        await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+                        await pusherServer.trigger('garden', 'file-deleted', {
+                            boxNumber: box,
+                            fileName: file
+                        });
+                    } catch (err) {
+                        console.error('[API] post-stream cleanup failed', err);
+                    } finally {
+                        controller.close();
+                    }
+                    return;
+                }
+                controller.enqueue(value);
+            },
+            async cancel(reason) {
+                try {
+                    // Client aborted → don't delete (user can retry)
+                    console.warn('[API] client aborted stream', reason);
+                } finally {
+                    try { await reader.cancel(); } catch {}
+                }
             }
-        }, 0); // Execute on next tick, after response is sent
+        });
 
         const headers = new Headers();
         headers.set("Content-Type", s3Response.ContentType || "application/octet-stream");
@@ -74,7 +74,7 @@ export async function GET(
         headers.set("Cache-Control", "no-store");
 
         console.log(`[API] Returning stream response for box ${box}`);
-        return new Response(readable, { headers });
+        return new Response(stream, { headers });
 
     } catch (err) {
         console.error(`[API] Download error for ${key}:`, err);
