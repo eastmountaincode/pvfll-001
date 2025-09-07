@@ -15,9 +15,9 @@ function contentDisposition(filename: string) {
 // GET /api/boxes/:box/files/:file - Stream file download and delete after transfer
 export async function GET(
     request: NextRequest,
-    { params }: { params: Promise<{ box: string; file: string }> }
+    { params }: { params: { box: string; file: string } }
 ) {
-    const { box, file } = await params;
+    const { box, file } = params;
     const bucket = process.env.AWS_BUCKET_NAME!;
     const key = `box${box}/${file}`;
 
@@ -70,8 +70,9 @@ export async function GET(
         const headers = new Headers();
         headers.set("Content-Type", s3Response.ContentType || "application/octet-stream");
         headers.set("Content-Disposition", contentDisposition(file));
-        if (typeof s3Response.ContentLength === "number") headers.set("Content-Length", String(s3Response.ContentLength));
+        // Intentionally omit Content-Length to keep connection open until controller.close()
         headers.set("Cache-Control", "no-store");
+        headers.set("Accept-Ranges", "bytes");
 
         console.log(`[API] Returning stream response for box ${box}`);
         return new Response(stream, { headers });
