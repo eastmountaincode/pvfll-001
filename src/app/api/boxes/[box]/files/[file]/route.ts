@@ -1,9 +1,23 @@
 import { S3Client, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { NextRequest, NextResponse } from "next/server";
 import { pusherServer } from "@/lib/pusher";
 
-const s3 = new S3Client({ region: process.env.AWS_REGION });
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const s3 = new S3Client({ region: process.env.AWS_REGION! });
+
+function contentDisposition(filename: string) {
+    const safe = filename.replace(/"/g, '\\"');
+    return `attachment; filename="${safe}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string) {
+    return Promise.race([
+        p,
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`${label} timeout after ${ms}ms`)), ms)),
+    ]);
+}
 
 // GET /api/boxes/:box/files/:file - Stream file download and delete after transfer
 export async function GET(
@@ -11,96 +25,61 @@ export async function GET(
     { params }: { params: Promise<{ box: string; file: string }> }
 ) {
     const { box, file } = await params;
-    const bucket = process.env.AWS_BUCKET_NAME;
-
-    console.log(`[API] Starting download for box ${box}, file: ${file}`);
-    console.log(`[API] File parameter: "${file}"`);
-    console.log(`[API] Filename length: ${file.length}`);
-
-    if (!bucket) {
-        console.error(`[API] AWS bucket configuration missing`);
-        return NextResponse.json({ error: "AWS bucket configuration missing" }, { status: 500 });
-    }
-
+    const bucket = process.env.AWS_BUCKET_NAME!;
     const key = `box${box}/${file}`;
 
+    console.log(`[API] Starting download for box ${box}, file: ${file}`);
+
     try {
-        // Get the file from S3
-        const getCommand = new GetObjectCommand({ 
-            Bucket: bucket, 
-            Key: key
-        });
-        
-        // This returns metadata and a stream handle, but doesn't actually download yet
-        const s3Response = await s3.send(getCommand);
+        const s3Response = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
         
         if (!s3Response.Body || typeof s3Response.Body.transformToWebStream !== 'function') {
             console.error(`[API] File not found: ${key}`);
-            return NextResponse.json({ error: "File not found" }, { status: 404 });
+            return new Response(JSON.stringify({ error: "File not found" }), { status: 404 });
         }
 
         console.log(`[API] File found, starting stream for: ${key}`);
 
-        // Create a transform stream to handle cleanup after transfer
         const { readable, writable } = new TransformStream();
-        const s3Stream = s3Response.Body.transformToWebStream();
+        const pipePromise = s3Response.Body.transformToWebStream().pipeTo(writable);
 
-        s3Stream
-            .pipeTo(writable)
-            // fires only if the client fully consumed the stream
-            .then(async () => {
+        // Post-response cleanup using setTimeout to defer until after response is sent
+        setTimeout(async () => {
+            try {
+                console.log(`[API] Waiting for stream completion for: ${key}`);
+                // Only proceed on full, successful client read
+                await pipePromise;
+                
                 console.log(`[API] Stream completed, deleting file: ${key}`);
-                try {
-                    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
-                    console.log(`[API] File deleted, sending Pusher event for box ${box}`);
-                    await pusherServer.trigger('garden', 'file-deleted', {
-                        boxNumber: box,
-                        fileName: file
-                    });
-                    console.log(`[API] Cleanup completed for box ${box}`);
-                } catch (err) {
-                    console.error(`[API] Delete or Pusher failed for ${key}:`, err);
-                }
-            })
-            // fires if the stream to the client failed/aborted
-            .catch(err => {
-                console.error(`[API] Stream failed/aborted for ${key}:`, err);
-                // policy: keep the object so user can retry
-            });
+                await withTimeout(s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })), 8000, "S3 Delete");
+                
+                console.log(`[API] File deleted, sending Pusher event for box ${box}`);
+                await withTimeout(
+                    pusherServer.trigger("garden", "file-deleted", { boxNumber: box, fileName: file }),
+                    8000,
+                    "Pusher trigger"
+                );
+                
+                console.log(`[API] Cleanup completed for box ${box}`);
+            } catch (err) {
+                // Catches stream aborts OR delete/notify failures
+                console.error(`[API] Post-response cleanup error for ${key}:`, err);
+            }
+        }, 0); // Execute on next tick, after response is sent
 
-        // Set appropriate headers with proper filename encoding
         const headers = new Headers();
-        headers.set('Content-Type', s3Response.ContentType || 'application/octet-stream');
-        
-        try {
-            // Properly encode filename for Content-Disposition header
-            // Use both filename and filename* (RFC 5987) for maximum compatibility
-            const safeFilename = file.replace(/[^\x20-\x7E]/g, '_'); // ASCII-safe fallback
-            const encodedFilename = encodeURIComponent(file);
-            const dispositionValue = `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`;
-            
-            console.log(`[API] Setting Content-Disposition: ${dispositionValue}`);
-            headers.set('Content-Disposition', dispositionValue);
-        } catch (headerError) {
-            console.error(`[API] Error setting Content-Disposition header:`, headerError);
-            // Fallback to simple filename without special characters
-            const fallbackFilename = file.replace(/[^\w\s.-]/g, '_');
-            headers.set('Content-Disposition', `attachment; filename="${fallbackFilename}"`);
-        }
-        
-        if (typeof s3Response.ContentLength === 'number') {
-            headers.set('Content-Length', String(s3Response.ContentLength));
-        }
+        headers.set("Content-Type", s3Response.ContentType || "application/octet-stream");
+        headers.set("Content-Disposition", contentDisposition(file));
+        if (typeof s3Response.ContentLength === "number") headers.set("Content-Length", String(s3Response.ContentLength));
+        headers.set("Cache-Control", "no-store");
 
         console.log(`[API] Returning stream response for box ${box}`);
-
-        // Return the readable stream to the client
         return new Response(readable, { headers });
 
     } catch (err) {
         console.error(`[API] Download error for ${key}:`, err);
         const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
+        return new Response(JSON.stringify({ error: errorMessage }), { status: 500 });
     }
 }
 
@@ -110,11 +89,7 @@ export async function DELETE(
     { params }: { params: Promise<{ box: string; file: string }> }
 ) {
     const { box, file } = await params;
-    const bucket = process.env.AWS_BUCKET_NAME;
-
-    if (!bucket) {
-        return NextResponse.json({ error: "AWS bucket configuration missing" }, { status: 500 });
-    }
+    const bucket = process.env.AWS_BUCKET_NAME!;
 
     const key = `box${box}/${file}`;
 
