@@ -64,7 +64,8 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
             // Fetch the file (this triggers API call immediately - deletes file and sends Pusher event)
             const response = await fetch(`/api/boxes/${boxNumber}/files/${encodeURIComponent(boxStatus.name)}`);
             if (!response.ok) throw new Error('Download failed');
-            
+
+            console.log(`Response:`, response);
             console.log(`Download API call successful for box ${boxNumber}`);
             
             // Create blob and trigger download
