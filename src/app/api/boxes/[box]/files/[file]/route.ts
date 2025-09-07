@@ -14,6 +14,9 @@ export async function GET(
     const bucket = process.env.AWS_BUCKET_NAME;
 
     console.log(`[API] Starting download for box ${box}, file: ${file}`);
+    console.log(`[API] File parameter: "${file}"`);
+    console.log(`[API] File length: ${file.length}`);
+    console.log(`[API] File char codes:`, Array.from(file).map((char, i) => `${i}: ${char} (${char.charCodeAt(0)})`).slice(0, 10));
 
     if (!bucket) {
         console.error(`[API] AWS bucket configuration missing`);
@@ -71,10 +74,26 @@ export async function GET(
             }
         });
 
-        // Set appropriate headers
+        // Set appropriate headers with proper filename encoding
         const headers = new Headers();
         headers.set('Content-Type', s3Response.ContentType || 'application/octet-stream');
-        headers.set('Content-Disposition', `attachment; filename="${file}"`);
+        
+        try {
+            // Properly encode filename for Content-Disposition header
+            // Use both filename and filename* (RFC 5987) for maximum compatibility
+            const safeFilename = file.replace(/[^\x20-\x7E]/g, '_'); // ASCII-safe fallback
+            const encodedFilename = encodeURIComponent(file);
+            const dispositionValue = `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`;
+            
+            console.log(`[API] Setting Content-Disposition: ${dispositionValue}`);
+            headers.set('Content-Disposition', dispositionValue);
+        } catch (headerError) {
+            console.error(`[API] Error setting Content-Disposition header:`, headerError);
+            // Fallback to simple filename without special characters
+            const fallbackFilename = file.replace(/[^\w\s.-]/g, '_');
+            headers.set('Content-Disposition', `attachment; filename="${fallbackFilename}"`);
+        }
+        
         if (typeof s3Response.ContentLength === 'number') {
             headers.set('Content-Length', String(s3Response.ContentLength));
         }
