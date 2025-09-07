@@ -21,17 +21,13 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
         try {
             setLoading(true);
             console.log(`Fetching status for box ${boxNumber}`);
-            console.log(`Network status: ${navigator.onLine ? 'online' : 'offline'}`);
-            console.log(`User agent: ${navigator.userAgent}`);
             
             const apiUrl = `/api/boxes/${boxNumber}/files`;
             console.log(`Making request to: ${apiUrl}`);
             
             const response = await fetch(apiUrl);
             
-            console.log(`API response status: ${response.status} ${response.statusText}`);
-            console.log(`API response headers:`, Object.fromEntries(response.headers.entries()));
-            
+  
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error(`API error response body:`, errorText);
