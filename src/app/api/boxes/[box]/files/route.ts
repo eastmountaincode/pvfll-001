@@ -2,6 +2,10 @@ import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const s3 = new S3Client({ region: process.env.AWS_REGION});
 
 // GET /api/boxes/:box/files - List files in a box
