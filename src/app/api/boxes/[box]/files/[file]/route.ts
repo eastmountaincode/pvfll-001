@@ -8,9 +8,9 @@ const s3 = new S3Client({ region: process.env.AWS_REGION });
 // GET /api/boxes/:box/files/:file - Stream file download and delete after transfer
 export async function GET(
     request: NextRequest,
-    { params }: { params: { box: string; file: string } }
+    { params }: { params: Promise<{ box: string; file: string }> }
 ) {
-    const { box, file } = params;
+    const { box, file } = await params;
     const bucket = process.env.AWS_BUCKET_NAME;
 
     console.log(`[API] Starting download for box ${box}, file: ${file}`);
@@ -94,9 +94,9 @@ export async function GET(
 // DELETE /api/boxes/:box/files/:file - Delete a specific file
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { box: string; file: string } }
+    { params }: { params: Promise<{ box: string; file: string }> }
 ) {
-    const { box, file } = params;
+    const { box, file } = await params;
     const bucket = process.env.AWS_BUCKET_NAME;
 
     if (!bucket) {
