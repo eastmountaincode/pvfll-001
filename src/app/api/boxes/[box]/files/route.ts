@@ -11,12 +11,18 @@ export async function GET(
 ) {
     const { box } = await params;
     const bucket = process.env.AWS_BUCKET_NAME;
+    
+    console.log(`[API] GET /api/boxes/${box}/files - Request received`);
+    console.log(`[API] User-Agent: ${request.headers.get('user-agent')}`);
+    console.log(`[API] Bucket: ${bucket ? 'configured' : 'missing'}`);
 
     if (!bucket) {
+        console.error(`[API] AWS bucket configuration missing`);
         return NextResponse.json({ error: "AWS bucket configuration missing" }, { status: 500 });
     }
 
     const prefix = `box${box}/`;
+    console.log(`[API] S3 prefix: ${prefix}`);
 
     try {
         const data = await s3.send(
@@ -26,7 +32,10 @@ export async function GET(
             })
         );
 
+        console.log(`[API] S3 response: ${data.Contents?.length || 0} items found`);
+
         if (!data.Contents || data.Contents.length === 0) {
+            console.log(`[API] No contents found, returning empty: true`);
             return NextResponse.json({ empty: true });
         }
 
@@ -36,21 +45,28 @@ export async function GET(
             return !key.endsWith('/') && (obj.Size || 0) > 0;
         });
 
+        console.log(`[API] Filtered to ${actualFiles.length} actual files`);
+
         if (actualFiles.length === 0) {
+            console.log(`[API] No actual files found, returning empty: true`);
             return NextResponse.json({ empty: true });
         }
 
         const file = actualFiles[0];
         const fileName = file.Key?.replace(prefix, "") || "";
 
-        return NextResponse.json({
+        const result = {
             empty: false,
             name: fileName,
             size: file.Size || 0
-        });
+        };
+
+        console.log(`[API] Returning file info:`, result);
+        return NextResponse.json(result);
     } catch (err) {
-        console.error("list files error:", err);
+        console.error(`[API] S3 list files error for box ${box}:`, err);
         const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+        console.error(`[API] Error message: ${errorMessage}`);
         return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
 }   

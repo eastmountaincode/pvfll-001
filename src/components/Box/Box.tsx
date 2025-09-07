@@ -21,12 +21,33 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
         try {
             setLoading(true);
             console.log(`Fetching status for box ${boxNumber}`);
-            const response = await fetch(`/api/boxes/${boxNumber}/files`);
+            console.log(`Network status: ${navigator.onLine ? 'online' : 'offline'}`);
+            console.log(`User agent: ${navigator.userAgent}`);
+            
+            const apiUrl = `/api/boxes/${boxNumber}/files`;
+            console.log(`Making request to: ${apiUrl}`);
+            
+            const response = await fetch(apiUrl);
+            
+            console.log(`API response status: ${response.status} ${response.statusText}`);
+            console.log(`API response headers:`, Object.fromEntries(response.headers.entries()));
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`API error response body:`, errorText);
+                throw new Error(`API returned ${response.status}: ${response.statusText}. Body: ${errorText}`);
+            }
+            
             const data = await response.json();
             console.log(`Box ${boxNumber} status:`, data);
             setBoxStatus(data);
         } catch (error) {
-            console.error('Error fetching box status:', error);
+            console.error(`Error fetching box ${boxNumber} status:`, error);
+            console.error(`Error details:`, {
+                name: error instanceof Error ? error.name : 'Unknown',
+                message: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined
+            });
         } finally {
             setLoading(false);
         }
