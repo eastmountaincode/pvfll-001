@@ -43,36 +43,30 @@ export async function GET(
 
         // Create a transform stream to handle cleanup after transfer
         const { readable, writable } = new TransformStream();
-        
-        // Start streaming from S3 to the transform stream
         const s3Stream = s3Response.Body.transformToWebStream();
-        const pipePromise = s3Stream.pipeTo(writable);
 
-        // Handle cleanup after the stream completes (successfully or not)
-        pipePromise.finally(async () => {
-            try {
+        s3Stream
+            .pipeTo(writable)
+            // fires only if the client fully consumed the stream
+            .then(async () => {
                 console.log(`[API] Stream completed, deleting file: ${key}`);
-                
-                // Delete the file from S3 after transfer
-                await s3.send(new DeleteObjectCommand({ 
-                    Bucket: bucket, 
-                    Key: key 
-                }));
-
-                console.log(`[API] File deleted, sending Pusher event for box ${box}`);
-
-                // Trigger Pusher event to notify all clients that the file was deleted
-                await pusherServer.trigger('garden', 'file-deleted', {
-                    boxNumber: box,
-                    fileName: file
-                });
-
-                console.log(`[API] Cleanup completed for box ${box}`);
-                
-            } catch (cleanupError) {
-                console.error(`[API] Cleanup failed for ${key}:`, cleanupError);
-            }
-        });
+                try {
+                    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+                    console.log(`[API] File deleted, sending Pusher event for box ${box}`);
+                    await pusherServer.trigger('garden', 'file-deleted', {
+                        boxNumber: box,
+                        fileName: file
+                    });
+                    console.log(`[API] Cleanup completed for box ${box}`);
+                } catch (err) {
+                    console.error(`[API] Delete or Pusher failed for ${key}:`, err);
+                }
+            })
+            // fires if the stream to the client failed/aborted
+            .catch(err => {
+                console.error(`[API] Stream failed/aborted for ${key}:`, err);
+                // policy: keep the object so user can retry
+            });
 
         // Set appropriate headers with proper filename encoding
         const headers = new Headers();
