@@ -68,9 +68,11 @@ export async function GET(
         });
 
         const headers = new Headers();
-        headers.set("Content-Type", s3Response.ContentType || "application/octet-stream");
+        // Force download behavior across browsers (avoid inline preview)
+        headers.set("Content-Type", "application/octet-stream");
         headers.set("Content-Disposition", contentDisposition(file));
-        // Intentionally omit Content-Length to keep connection open until controller.close()
+        // Security and caching hygiene
+        headers.set("X-Content-Type-Options", "nosniff");
         headers.set("Cache-Control", "no-store");
         headers.set("Accept-Ranges", "bytes");
 
