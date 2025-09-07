@@ -4,9 +4,9 @@ import { pusherServer } from "@/lib/pusher";
 // POST /api/boxes/:box/events - Trigger events for a box
 export async function POST(
     request: NextRequest,
-    { params }: { params: Promise<{ box: string }> }
+    { params }: { params: { box: string } }
 ) {
-    const { box } = await params;
+    const { box } = params;
     
     try {
         const { type, fileName, fileSize } = await request.json();

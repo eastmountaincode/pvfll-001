@@ -7,9 +7,9 @@ const s3 = new S3Client({ region: process.env.AWS_REGION});
 // GET /api/boxes/:box/files - List files in a box
 export async function GET(
     request: NextRequest,
-    { params }: { params: Promise<{ box: string }> }
+    { params }: { params: { box: string } }
 ) {
-    const { box } = await params;
+    const { box } = params;
     const bucket = process.env.AWS_BUCKET_NAME;
     
     console.log(`[API] GET /api/boxes/${box}/files - Request received`);
@@ -74,9 +74,9 @@ export async function GET(
 // POST /api/boxes/:box/files - Upload a file (presigned POST)
 export async function POST(
     request: NextRequest,
-    { params }: { params: Promise<{ box: string }> }
+    { params }: { params: { box: string } }
 ) {
-    const { box } = await params;
+    const { box } = params;
     const maxFileSize = 1024 * 1024 * 100; // 100 MB
 
     try {
