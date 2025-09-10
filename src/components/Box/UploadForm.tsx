@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 interface UploadFormProps {
     boxNumber: number;
@@ -15,6 +15,7 @@ export default function UploadForm({ boxNumber, disabled, onUploadComplete }: Up
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const inputRef = useRef<HTMLInputElement | null>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0] || null;
@@ -88,6 +89,10 @@ export default function UploadForm({ boxNumber, disabled, onUploadComplete }: Up
             
             // Clear selected file and notify parent
             setSelectedFile(null);
+            if (inputRef.current) {
+                // Ensure the same file can be selected again and still fire onChange
+                inputRef.current.value = '';
+            }
             onUploadComplete();
         } catch (error) {
             console.error('Error uploading file:', error);
@@ -103,7 +108,12 @@ export default function UploadForm({ boxNumber, disabled, onUploadComplete }: Up
                     name="fileToUpload"
                     required
                     className="hidden"
+                    ref={inputRef}
                     onChange={handleFileChange}
+                    onClick={(e) => {
+                        // Reset value so selecting the same file triggers onChange
+                        (e.currentTarget as HTMLInputElement).value = '';
+                    }}
                     disabled={disabled}
                 />
             </label>
