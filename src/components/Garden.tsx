@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import Box from './Box/Box';
 import { pusherClient } from '@/lib/pusher';
 
@@ -55,9 +55,9 @@ export default function Garden() {
         };
     }, []);
 
-    const registerBoxCallback = (boxNumber: number, callback: () => void) => {
+    const registerBoxCallback = useCallback((boxNumber: number, callback: () => void) => {
         boxUpdateCallbacks.current[boxNumber] = callback;
-    };
+    }, []);
 
     return (
         <div className="min-h-screen font-serif font-normal">

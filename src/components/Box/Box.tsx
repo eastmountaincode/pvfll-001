@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import BoxHeader from './BoxHeader';
 import BoxStatus from './BoxStatus';
 import ReceiveButton from './ReceiveButton';
@@ -58,11 +58,16 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
         }
     };
 
+    const registeredRef = useRef(false);
+
     useEffect(() => {
         fetchBoxStatus();
-        // Register this box's update callback with the Garden component
-        onRegisterCallback(boxNumber, fetchBoxStatus);
-    }, [boxNumber, onRegisterCallback]);
+        if (!registeredRef.current) {
+            onRegisterCallback(boxNumber, fetchBoxStatus);
+            registeredRef.current = true;
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [boxNumber]);
 
     const handleReceive = async () => {
         if (boxStatus.empty || !boxStatus.name) return;
@@ -91,7 +96,6 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
             //     console.log(`Fallback refresh triggered for box ${boxNumber}`);
             //     fetchBoxStatus();
             // }, 2000); // Wait 2 seconds to allow for download and cleanup to complete
-            await fetchBoxStatus();
 
         } catch (error) {
             console.error('Error receiving file:', error);
