@@ -87,10 +87,11 @@ export default function Box({ boxNumber, onRegisterCallback }: BoxProps) {
             // File will be deleted by API after stream completes, Pusher event will be sent
             // Add fallback refresh for mobile devices where Pusher events might not work properly
             // TODO fix this later so it's not needed
-            setTimeout(() => {
-                console.log(`Fallback refresh triggered for box ${boxNumber}`);
-                fetchBoxStatus();
-            }, 2000); // Wait 2 seconds to allow for download and cleanup to complete
+            // setTimeout(() => {
+            //     console.log(`Fallback refresh triggered for box ${boxNumber}`);
+            //     fetchBoxStatus();
+            // }, 2000); // Wait 2 seconds to allow for download and cleanup to complete
+            await fetchBoxStatus();
 
         } catch (error) {
             console.error('Error receiving file:', error);
