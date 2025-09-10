@@ -8,8 +8,14 @@ export const dynamic = "force-dynamic";
 const s3 = new S3Client({ region: process.env.AWS_REGION! });
 
 function contentDisposition(filename: string) {
-    const safe = filename.replace(/"/g, '\\"');
-    return `attachment; filename="${safe}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+    // Use ASCII-only for filename= to satisfy ByteString limits
+    // Keep full UTF-8 in filename*= per RFC 5987
+    const asciiSafe = filename
+        .normalize('NFC')
+        .replace(/["\\]/g, match => (match === '"' ? '\\"' : '\\\\'))
+        .replace(/[^\x20-\x7E]/g, '_');
+    const utf8Encoded = encodeURIComponent(filename);
+    return `attachment; filename="${asciiSafe}"; filename*=UTF-8''${utf8Encoded}`;
 }
 
 // GET /api/boxes/:box/files/:file - Stream file download and delete after transfer
