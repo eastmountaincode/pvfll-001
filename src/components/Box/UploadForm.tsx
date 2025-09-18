@@ -10,6 +10,8 @@ interface UploadFormProps {
 
 const uploadColor = 'bg-yellow-400';
 const disabledOpacity = 'opacity-20';
+const MAX_FILE_SIZE = 1024 * 1024 * 100; // 100MB
+
 
 export default function UploadForm({ boxNumber, disabled, onUploadComplete }: UploadFormProps) {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -19,9 +21,21 @@ export default function UploadForm({ boxNumber, disabled, onUploadComplete }: Up
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0] || null;
+    
+        if (file && file.size > MAX_FILE_SIZE) {
+            alert(`File too big! Max size is ${Math.round(MAX_FILE_SIZE / (1024 * 1024))}MB.`);
+            setSelectedFile(null);  // reset selected file
+            setUploadProgress(0);
+            if (inputRef.current) {
+                inputRef.current.value = '';  // so the same file can be reselected
+            }
+            return;  // stop here
+        }
+    
         setSelectedFile(file);
         setUploadProgress(0);
     };
+    
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
